@@ -8,26 +8,31 @@ Status values: `Proposed` (recommended, not yet confirmed) · `Accepted` · `Sup
 
 ---
 
-## ADR-001: Backend — Supabase
-**Status:** Proposed
-**Question:** Custom Node API or Supabase?
+## ADR-001: Database — MongoDB
+**Status:** Accepted (owner's choice; supersedes the earlier Supabase proposal)
+**Question:** Which backend and database?
 
-**Decision:** Supabase (Postgres + Auth + RLS + Edge Functions + `pg_cron`),
-plus one small Node service for PDF generation.
+**Decision:** MongoDB Atlas with Mongoose, accessed only from Next.js server
+code (route handlers, server actions, server components).
 
 **Why:**
-- The spec's core security rule ("a user can only read patients they own or are
-  linked to") is exactly what Postgres **Row Level Security** does. With
-  Supabase it lives in the database, so no API endpoint can forget to check it.
-- Auth (magic link, phone OTP, sessions) is done; we don't build password reset.
-- The spec already requires stats in SQL; Supabase RPC calls those functions
-  directly from the app.
-- `pg_cron` + edge functions cover the reminder scheduler without extra infra.
-- It's still plain Postgres: if we outgrow it, migrations move to any host.
+- Owner's preferred, familiar stack — speed of building matters more than
+  theoretical fit.
+- The data is document-shaped: a patient with embedded targets, thresholds,
+  medications and reminders reads in one query.
+- Atlas gives encryption at rest, backups and a free tier out of the box.
+- Aggregation pipelines with `$dateTrunc` / `$dateToString` + `timezone` handle
+  per-timezone daily, weekly and AM/PM bucketing.
 
-**Trade-offs:** some vendor lock-in for auth/edge functions; RLS policies need
-careful tests (planned). Free tier pauses inactive projects — fine for
-development, use a paid tier once real people rely on it.
+**Consequences we accept and design around:**
+- **No row-level security** → [ADR-009](#adr-009-access-control-without-row-level-security).
+- **No foreign keys or DB-level referential integrity** → repositories own
+  writes; Mongoose schemas + Zod validate; deletes of a patient cascade in code.
+- **Schema is enforced by the app, not the DB** → Mongoose schemas are the
+  source of truth; add collection `$jsonSchema` validators for the reading
+  collections as a second safety net.
+- Stats are aggregation pipelines instead of SQL functions — same rule applies:
+  **one module, used by dashboard and PDF**.
 
 ---
 
@@ -66,14 +71,14 @@ This also gives us multi-caregiver and viewer access for free.
 ## ADR-004: PDF generation
 **Status:** Proposed
 
-**Decision:** a small Node service using `@react-pdf/renderer`, which calls the
-same SQL stats functions as the dashboard.
+**Decision:** `@react-pdf/renderer` inside a Next.js route handler
+(`app/api/patients/[id]/report/route.ts`, Node runtime), calling the same
+`lib/stats/` functions as the dashboard.
 
 **Why:** server-side means identical output on every device (spec requirement).
-`@react-pdf/renderer` is pure JS (no headless Chrome to host), lets us write
-the report as React components, and draws charts as SVG. Supabase Edge
-Functions run Deno, where react-pdf support is less proven, so we keep PDF in
-Node (deployable to any Node host, e.g. a serverless function).
+`@react-pdf/renderer` is pure JS (no headless Chrome to host, fits serverless
+size limits), lets us write the report as React components, and draws charts as
+SVG. Living inside the Next.js app means no separate service to deploy.
 
 **Alternative:** HTML template rendered by headless Chromium — pixel-perfect
 reuse of web styles, but heavier to host. Revisit if react-pdf layout limits bite.
@@ -128,3 +133,26 @@ in the week/month. Rolling windows are always comparable.
   mmol/L = mg/dL ÷ 18.0 in one shared util.
 - Timestamps stored UTC; each reading also stores the IANA timezone it was taken
   in, so "which day" and "morning vs evening" never shift later.
+
+---
+
+## ADR-009: Access control without row-level security
+**Status:** Accepted
+
+**Decision:** all database access goes through a single server-side data layer
+(`lib/db/`). Every function takes the session, calls
+`requirePatientAccess(session, patientId, minRole)` from `lib/db/access.ts`,
+and always filters by `patientId`.
+
+**Why:** MongoDB can't enforce "a user only sees patients they're linked to" in
+the database the way Postgres RLS can. The risk is a route that forgets to check.
+Funnelling everything through one module makes the check impossible to skip by
+accident and easy to test.
+
+**Guardrails:**
+- Route handlers / server actions / components never import the Mongo client
+  or models directly — an ESLint `no-restricted-imports` rule enforces it.
+- `import 'server-only'` in `lib/db/*` so DB code can never ship to the browser.
+- Test matrix: every repository function × {owner, caregiver, viewer, stranger}.
+- Role rules: read = any role; write readings = owner/caregiver; manage access,
+  export-all, delete patient = owner.

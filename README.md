@@ -29,8 +29,8 @@ Planning complete, implementation not started. See the docs:
 | [`CLAUDE.md`](CLAUDE.md) | Working agreement and hard rules for contributors |
 
 ## Stack
-Vite · React · TypeScript · TanStack Query · Tailwind CSS · PWA · Supabase
-(Postgres + Auth + RLS) · Node PDF service
+Next.js · React · TypeScript · Tailwind CSS · TanStack Query · PWA ·
+MongoDB (Atlas + Mongoose) · Auth.js · react-pdf
 
 ## Disclaimer
 This app is for recording and sharing information only. It does not give

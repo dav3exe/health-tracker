@@ -76,151 +76,152 @@ remember, no OTP codes to read out over the phone.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | Vite + React + TypeScript, TanStack Query, Tailwind CSS | Existing, familiar stack |
-| PWA | `vite-plugin-pwa` (Workbox) | Installable, offline app shell |
-| Offline store | IndexedDB via Dexie | Durable outbox for unsynced readings |
-| Backend | **Supabase** (Postgres + Auth + Row Level Security + Edge Functions) | See [ADR-001](./DECISIONS.md#adr-001-backend-supabase). RLS *is* the spec's "row-level access" rule, enforced in the database |
-| Stats | Postgres SQL functions (called via RPC) | One source of truth for dashboard + PDF |
-| PDF | Small Node service using `@react-pdf/renderer` | See [ADR-004](./DECISIONS.md#adr-004-pdf-generation). Identical output on every device |
+| App | **Next.js (App Router) + React + TypeScript**, Tailwind CSS | One codebase for UI and API; server code (DB access, PDF, cron) lives next to the screens that use it |
+| Client data | TanStack Query | Caching and optimistic updates for logging; works alongside the offline outbox |
+| PWA | Serwist (`@serwist/next`) | Maintained successor to `next-pwa`; installable app + offline app shell |
+| Offline store | IndexedDB via Dexie | Durable outbox for readings saved without signal |
+| Database | **MongoDB Atlas** + Mongoose | See [ADR-001](./DECISIONS.md#adr-001-database-mongodb). Encryption at rest on by default; free tier to start |
+| Validation | Zod, shared by client and server | Same rules on the form and in the API, so a bad reading can't sneak in through sync |
+| Auth | Auth.js (NextAuth v5) with the MongoDB adapter | Magic-link sign-in + our own invite-link flow for patients' phones |
+| Access control | One server-side data-access layer (`lib/db/access.ts`) | MongoDB has no row-level security, so **every** query goes through one module that checks membership. See [ADR-009](./DECISIONS.md#adr-009-access-control-without-row-level-security) |
+| Stats | MongoDB aggregation pipelines in one shared module (`lib/stats/`) | One source of truth for dashboard + PDF |
+| PDF | `@react-pdf/renderer` in a Next.js route handler (Node runtime) | See [ADR-004](./DECISIONS.md#adr-004-pdf-generation). Identical output on every device |
 | Charts (UI) | Recharts | Simple, SVG, works with the target-band pattern |
 | Reminders | Web Push first, behind a `ReminderChannel` interface; WhatsApp next | See [ADR-003](./DECISIONS.md#adr-003-reminder-channels) |
-| Testing | Vitest (unit), pgTAP or Vitest-against-local-Supabase (SQL + RLS), Playwright (E2E) | Stats and access rules are where bugs hurt most |
-| CI | GitHub Actions: typecheck, lint, test, migration check | |
+| Scheduler | Cron hitting a protected route handler (e.g. Vercel Cron) | No extra server to run |
+| Hosting | Vercel (app) + MongoDB Atlas (data) | Both have free tiers; move to paid when real people rely on it |
+| Testing | Vitest (unit + stats against `mongodb-memory-server`), Playwright (E2E) | Stats and access rules are where bugs hurt most |
+| CI | GitHub Actions: typecheck, lint, test | |
 
 ---
 
-## 4. Data model
+## 4. Data model (MongoDB collections)
 
 Changes from the original spec are marked **[new]** or **[changed]** with the
-reason. All timestamps are `timestamptz` (stored UTC).
+reason. All dates are stored as BSON `Date` (always UTC).
 
-```sql
--- People who sign in
-users (
-  id uuid pk,                          -- = Supabase auth.users.id
-  display_name text,
-  phone text null, email text null,
-  locale text default 'en',
-  created_at timestamptz
-)
+**Embed vs reference rule:** small, bounded data that is always read with the
+patient (targets, thresholds, medications, reminder settings) is **embedded** in
+the patient document. Data that grows forever (readings, logs) gets **its own
+collection**, indexed by `{ patientId, measuredAt }`.
 
--- People being tracked [changed: no longer required to be a user]
-patients (
-  id uuid pk,
-  display_name text,
-  date_of_birth date null,
-  sex text null,
-  height_cm numeric null,
-  conditions text[] default '{}',      -- e.g. hypertension, type2_diabetes
-  glucose_unit text check in ('mgdl','mmol') default 'mgdl',  -- display only
-  timezone text not null,              -- IANA, e.g. 'Africa/Lagos'
-  doctor_name text null, doctor_contact text null,
-  emergency_contact text null,
-  created_at, updated_at, deleted_at null
-)
+```ts
+// users — people who sign in (Auth.js also creates `accounts`, `sessions`,
+// `verificationTokens` collections via its MongoDB adapter)
+users {
+  _id: ObjectId,
+  name: string, email?: string, phone?: string,
+  locale: string = 'en',
+  createdAt: Date
+}
 
--- Who can see/do what [changed: generalises caregiver_links]
-patient_access (
-  user_id uuid fk users, patient_id uuid fk patients,
-  role text check in ('owner','caregiver','viewer'),
-  notify_on_flags boolean default true,
-  created_at,
-  primary key (user_id, patient_id)
-)
+// patients — people being tracked [changed: no login required]
+patients {
+  _id: ObjectId,
+  displayName: string,
+  dateOfBirth?: Date, sex?: string, heightCm?: number,
+  conditions: string[],                 // e.g. 'hypertension', 'type2_diabetes'
+  glucoseUnit: 'mgdl' | 'mmol',         // DISPLAY preference only
+  timezone: string,                     // IANA, e.g. 'Africa/Lagos'
+  doctor?: { name?: string, contact?: string },
+  emergencyContact?: string,
 
--- Targets from the patient's doctor [changed: history + source]
-target_ranges (
-  id uuid pk, patient_id,
-  sys_min, sys_max, dia_min, dia_max,
-  fasting_glucose_min_mgdl, fasting_glucose_max_mgdl,
-  post_meal_glucose_max_mgdl,
-  source text check in ('doctor','not_set'),
-  effective_from timestamptz,          -- [new] reports use the target that was
-                                       -- in force at the time of each reading
-  created_by uuid
-)
--- Never hardcode our own "normal" values. If no doctor target is set, the UI
--- shows "No target set — ask your doctor" and "% in range" is hidden.
+  // Embedded: small, bounded, always needed with the patient
+  targets: [{                           // [changed] history, newest last; reports
+    sysMin, sysMax, diaMin, diaMax,     // use the target in force at each reading
+    fastingGlucoseMinMgdl, fastingGlucoseMaxMgdl, postMealGlucoseMaxMgdl,
+    source: 'doctor',
+    effectiveFrom: Date, createdBy: ObjectId
+  }],
+  // Never hardcode our own "normal" values. Empty array → UI shows
+  // "No target set — ask your doctor" and hides "% in range".
 
--- Safety flag thresholds [new: separate from targets]
-alert_thresholds (
-  patient_id pk,
-  sys_high default 180, dia_high default 120,
-  sys_low default 90,
-  glucose_low_mgdl default 70, glucose_high_mgdl default 300,
-  is_default boolean default true,     -- UI labels these "Defaults — confirm with your doctor"
-  updated_by, updated_at
-)
+  alertThresholds: {                    // [new] safety flags, separate from targets
+    sysHigh: 180, diaHigh: 120, sysLow: 90,
+    glucoseLowMgdl: 70, glucoseHighMgdl: 300,
+    isDefault: true                     // UI: "Defaults — confirm with your doctor"
+  },
+  medications: [{ _id, name, dose, timesOfDay: string[] /* 'HH:mm' */, active, startedOn, stoppedOn? }],
+  reminders:   [{ _id, kind: 'bp_am'|'bp_pm'|'glucose'|'medication', timeOfDay: 'HH:mm',
+                  channel: 'webpush'|'whatsapp'|'sms', recipientUserId, enabled }],
 
-bp_readings (
-  id uuid pk,                          -- [new] generated ON THE CLIENT so offline
-                                       -- retries are idempotent (upsert by id)
-  patient_id,
-  measured_at timestamptz,
-  measured_tz text,                    -- [new] tz at time of reading, so "which
-                                       -- day / AM or PM" never shifts if the
-                                       -- profile timezone changes later
-  systolic smallint, diastolic smallint,   -- [changed] 'dia' → 'diastolic'
-  pulse smallint null,
-  arm text null, posture text null,
-  notes text null,
-  logged_by uuid fk users,
-  created_at, updated_at, deleted_at null  -- [new] soft delete: corrections
-                                           -- stay auditable
-)
+  createdAt, updatedAt, deletedAt?: Date
+}
 
-glucose_readings (
-  id uuid pk, patient_id,
-  measured_at, measured_tz,
-  value_mgdl numeric(5,1),             -- ONE canonical unit. numeric(5,1) so a
-                                       -- reading entered in mmol/L round-trips
-                                       -- without visible drift
-  context text check in ('fasting','before_meal','after_meal_2h','bedtime','random'),
-  notes, logged_by, created_at, updated_at, deleted_at
-)
--- mmol/L = mg/dL ÷ 18.0 (spec). Conversion lives in ONE shared util used by
--- both the app and the PDF service.
+// memberships — who can see/do what [changed: generalises caregiver_links]
+memberships {
+  _id, userId: ObjectId, patientId: ObjectId,
+  role: 'owner' | 'caregiver' | 'viewer',
+  notifyOnFlags: boolean = true,
+  createdAt
+}   // unique index { userId, patientId }; index { patientId }
 
-medications (id, patient_id, name, dose, times_of_day time[], active, started_on, stopped_on)
+bpReadings {
+  _id: string,                          // [new] UUID generated ON THE CLIENT so
+                                        // offline retries are idempotent (upsert by _id)
+  patientId: ObjectId,
+  measuredAt: Date,
+  measuredTz: string,                   // [new] tz at time of reading, so "which
+                                        // day / AM or PM" never shifts if the
+                                        // profile timezone changes later
+  systolic: number, diastolic: number,  // [changed] 'dia' → 'diastolic'
+  pulse?: number, arm?: 'left'|'right', posture?: 'sitting'|'standing'|'lying',
+  notes?: string,
+  loggedBy: ObjectId,
+  createdAt, updatedAt, deletedAt?: Date  // [new] soft delete: corrections stay auditable
+}   // index { patientId: 1, measuredAt: -1 }
 
-medication_logs (
-  id uuid pk, patient_id, medication_id,
-  scheduled_for timestamptz,           -- [new] needed to compute adherence
-                                       -- (taken ÷ scheduled); without it we only
-                                       -- know what was taken, not what was missed
-  taken_at timestamptz null,
-  status text check in ('taken','skipped','missed'),
-  logged_by
-)
+glucoseReadings {
+  _id: string, patientId, measuredAt, measuredTz,
+  valueMgdl: number,                    // ONE canonical unit, rounded to 0.1.
+                                        // Mixed units would corrupt every average.
+  context: 'fasting'|'before_meal'|'after_meal_2h'|'bedtime'|'random',
+  notes?, loggedBy, createdAt, updatedAt, deletedAt?
+}   // index { patientId: 1, measuredAt: -1 }
+// mmol/L = mg/dL ÷ 18.0 (spec). Conversion lives in ONE shared util
+// (lib/units.ts) used by forms, dashboard and PDF.
 
-symptom_logs (id, patient_id, logged_at, symptoms text[], notes, logged_by)
-weight_logs  (id, patient_id, measured_at, weight_kg, logged_by)
-lab_results  (id, patient_id, test_name, value, unit, taken_on, logged_by)   -- e.g. HbA1c
+medicationLogs {
+  _id: string, patientId, medicationId,
+  scheduledFor: Date,                   // [new] needed for adherence (taken ÷
+                                        // scheduled); without it we only know what
+                                        // was taken, not what was missed
+  takenAt?: Date, status: 'taken'|'skipped'|'missed', loggedBy
+}
 
-reminders (
-  id, patient_id, kind text check in ('bp_am','bp_pm','glucose','medication'),
-  time_of_day time, channel text, recipient_user_id, enabled
-)
+symptomLogs { _id, patientId, loggedAt, symptoms: string[], notes?, loggedBy }
+weightLogs  { _id, patientId, measuredAt, weightKg, loggedBy }
+labResults  { _id, patientId, testName, value, unit, takenOn, loggedBy }   // e.g. HbA1c
 
-flags (                                -- [new] persisted, so reports and the
-  id, patient_id, reading_type, reading_id,   -- caregiver feed show the same list
-  rule text, threshold_snapshot jsonb, created_at, acknowledged_by null
-)
+flags {                                 // [new] persisted, so reports and the
+  _id, patientId, readingType: 'bp'|'glucose', readingId,   // caregiver feed agree
+  rule: string, thresholdSnapshot: object, createdAt, acknowledgedBy?: ObjectId
+}
 
-consents (                             -- [new] NDPA / GDPR-style consent record
-  id, patient_id, user_id, purpose, version, granted_at, withdrawn_at null
-)
+consents {                              // [new] NDPA / GDPR-style consent record
+  _id, patientId, userId, purpose, version, grantedAt, withdrawnAt?
+}
 
-audit_log (                            -- [new] who read/changed/exported what
-  id, actor_user_id, patient_id, action, entity, entity_id, at
-)
+auditLog {                              // [new] who read/changed/exported what
+  _id, actorUserId, patientId, action, entity, entityId, at
+}
+
+pushSubscriptions { _id, userId, endpoint, keys, createdAt }   // Web Push
+invites { _id, patientId, role, tokenHash, expiresAt, usedAt? } // phone setup links
 ```
 
-**Row Level Security (every patient-scoped table):**
-a row is visible only if `exists (select 1 from patient_access where user_id =
-auth.uid() and patient_id = row.patient_id)`. Writes additionally require role
-`owner` or `caregiver`. Deleting a patient or managing access requires `owner`.
-These policies get their own automated tests.
+**Why not a time-series collection for readings?** MongoDB time-series
+collections restrict updates and deletes, and readings get corrected. Our
+volume (a few readings per person per day) is tiny, so a normal collection with
+a compound index is simpler and plenty fast.
+
+**Access control (replaces database row-level security):** MongoDB can't enforce per-row
+access, so it lives in code — in exactly one place. `lib/db/access.ts` exposes
+`requirePatientAccess(session, patientId, minRole)` and every repository
+function (`lib/db/readings.ts`, …) calls it before touching the database and
+always filters by `patientId`. Route handlers and server actions never import
+the Mongo client directly; a lint rule enforces that. Access rules get their
+own automated tests.
 
 ---
 
@@ -260,7 +261,8 @@ filled in whenever. Don't front-load them.
   notes. Weekly weight prompt on one chosen day.
 - **Offline:** every save writes to the IndexedDB outbox first, then syncs. A
   small, calm status line shows "Saved on this phone — will sync when online".
-  Client-generated UUIDs make retries safe.
+  Client-generated UUIDs make retries safe; the outbox posts to one
+  `POST /api/sync` route handler that upserts by `_id`.
 
 ### 5.3 Comparisons and charts
 
@@ -287,17 +289,19 @@ reading ÷ days in period).
   from 2 readings is noise that looks like news.
 - Deltas are shown as plain words + arrow + number: "↓ 6 lower than last week".
 
-**One implementation:** `get_period_stats(patient_id, metric, start, end)` and
-`get_series(patient_id, metric, start, end, bucket)` as SQL functions. The
-dashboard and the PDF service both call them. React components only format.
+**One implementation:** `getPeriodStats(patientId, metric, start, end)` and
+`getSeries(patientId, metric, start, end, bucket)` in `lib/stats/`, built as
+MongoDB aggregation pipelines. Local-day and AM/PM bucketing use each reading's
+own `measuredTz` (`$dateToString` / `$dateTrunc` with a `timezone`). The
+dashboard and the PDF route both call these. React components only format.
 
 **Charts:** one line chart per metric; doctor target shown as a shaded band;
 flagged readings drawn with a distinct **shape** (not just colour). See
 `DESIGN.md §6`.
 
 ### 5.4 Alerts (flag only)
-- Evaluated **server-side** on insert (DB trigger or edge function) so a reading
-  synced from offline still flags. Persisted to `flags`.
+- Evaluated **server-side** in the shared "save reading" function (used by
+  both the form and offline sync), so a reading synced from offline still flags. Persisted to `flags`.
 - Thresholds from `alert_thresholds`, defaults labelled
   *"Default safety values — please confirm with your doctor."*
 - Wording (fixed, reviewed): *"This reading is outside the usual range.
@@ -341,7 +345,8 @@ WhatsApp/email share and expiring share link later.
   }
   sendReminder(patient, channel, message)  // callers never know the channel
   ```
-- Scheduler: a cron (Supabase `pg_cron` → edge function) every 5 min, sends due
+- Scheduler: a cron (e.g. Vercel Cron) calls a secret-protected route handler
+  every 5–15 min (depends on hosting plan), which sends due
   reminders in the patient's timezone, skips ones already satisfied ("you
   already logged this morning").
 - **Missed-reading nudge:** optional per caregiver, e.g. "No morning BP from Ade
@@ -357,12 +362,13 @@ WhatsApp/email share and expiring share link later.
 
 ## 6. Privacy, security, safety
 
-- Encrypted in transit (HTTPS only) and at rest (Supabase default disk
-  encryption). Minimal data: everything beyond name/timezone is optional.
+- Encrypted in transit (HTTPS only) and at rest (MongoDB Atlas default
+  encryption; restrict Atlas network access to the app). Minimal data: everything beyond name/timezone is optional.
 - **Nigeria Data Protection Act 2023** (and GDPR-style principles generally):
   explicit consent, purpose limitation, access/export, deletion, consent
   withdrawal. Health data is *sensitive personal data* — treat it that way.
-- RLS on every table; service-role key only in server code, never in the client.
+- All DB access through the access-checked data layer; the MongoDB connection
+  string only in server-side env vars, never in client bundles.
 - No health values in logs, analytics, error reports, or push payloads by default.
 - `audit_log` for exports, access changes, and edits to readings.
 - Disclaimer in-app (settings + first run) and on every PDF page.
@@ -389,10 +395,10 @@ comments explaining the *why* (see `CLAUDE.md`).
 
 | # | Milestone | Includes | Done when |
 |---|---|---|---|
-| 0 | **Skeleton** | Vite/React/TS/Tailwind app, Supabase project + local dev, CI, lint/format, design tokens | `npm run dev` shows a styled "Today" screen; CI green |
-| 1 | **Log it** | Schema + migrations (§4), RLS + tests, auth + invite link, minimal onboarding (name, tz, unit), BP + glucose forms, validation, offline outbox, history list | A real user logs for a week, including offline |
-| 2 | **See it** | Stats SQL functions + tests, dashboard (week/month/6-month), charts with target bands, targets editing | Numbers match a hand-checked fixture |
-| 3 | **Share it** | PDF service + report v1, range picker, download | A doctor has seen one and given feedback |
+| 0 | **Skeleton** | Next.js/TS/Tailwind app, MongoDB Atlas + local dev DB, CI, lint/format, design tokens | `npm run dev` shows a styled "Today" screen; CI green |
+| 1 | **Log it** | Mongoose models + indexes (§4), access layer + tests, auth + invite link, minimal onboarding (name, tz, unit), BP + glucose forms, validation, offline outbox, history list | A real user logs for a week, including offline |
+| 2 | **See it** | Stats aggregation pipelines + tests, dashboard (week/month/6-month), charts with target bands, targets editing | Numbers match a hand-checked fixture |
+| 3 | **Share it** | PDF route + report v1, range picker, download | A doctor has seen one and given feedback |
 | 4 | **Watch it** | Alert thresholds, server-side flagging, caregiver notifications | Flag appears on save + caregiver notified |
 | 5 | **Remember it** | Reminder scheduler, web push channel, missed-reading nudge | Reminders arrive on an installed PWA |
 | 6 | **Polish + rights** | Full onboarding wizard, medications/symptoms/weight, export + delete, PWA install prompts, WhatsApp channel | Data-rights flows tested end to end |
@@ -407,10 +413,10 @@ payoff, and early doctor feedback shapes the layout.
 
 ## 9. Testing strategy
 
-- **Stats SQL:** fixture patients with known readings → assert exact averages,
+- **Stats:** run against `mongodb-memory-server`; fixture patients with known readings → assert exact averages,
   % in range, deltas, AM/PM split, the minimum-data rule, and local-day
   bucketing (including a reading at 23:30 and 00:30 local).
-- **RLS:** user A cannot read/write patient B; viewer cannot write; only owner deletes.
+- **Access layer:** user A cannot read/write patient B; viewer cannot write; only owner deletes.
 - **Validation:** table-driven tests for every tier and the unit-slip check.
 - **Offline:** Playwright with network off → save → network on → exactly one row.
 - **PDF:** snapshot the report's data model (not pixels); visual check by hand.
@@ -422,9 +428,9 @@ payoff, and early doctor feedback shapes the layout.
 | Risk | Mitigation |
 |---|---|
 | Users stop logging | 10-second flow, reminders, "today" checklist, caregiver nudge |
-| Dashboard and PDF disagree | Single SQL stats layer; shared unit util |
+| Dashboard and PDF disagree | Single stats module; shared unit util |
 | Wrong unit entered | Unit-slip check, single canonical unit |
 | App seen as giving medical advice | Fixed reviewed wording, no hardcoded "normal", disclaimers |
 | iOS web push only works for installed PWAs (iOS 16.4+) | Install prompt in onboarding; WhatsApp channel in M6 |
 | WhatsApp Business template approval takes time | Start the Meta/Twilio application during M3 |
-| Data leak | RLS + tests, no values in notifications/logs, audit log |
+| Data leak | Single access-checked data layer + tests, no values in notifications/logs, audit log |
