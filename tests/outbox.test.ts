@@ -28,8 +28,8 @@ const offline = () =>
   vi.fn().mockRejectedValue(new TypeError("Failed to fetch"));
 
 function serverAccepting() {
-  return vi.fn(async (_url: string, init: RequestInit) => {
-    const body = JSON.parse(String(init.body));
+  return vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body));
     return new Response(
       JSON.stringify({
         accepted: body.upserts.map((r: { id: string }) => r.id),
@@ -80,7 +80,7 @@ describe("outbox", () => {
     await syncNow(lost);
     const server = serverAccepting();
     await syncNow(server);
-    const sent = JSON.parse(String(server.mock.calls[0][1].body));
+    const sent = JSON.parse(String(server.mock.calls[0][1]?.body));
     expect(sent.upserts.map((u: { id: string }) => u.id)).toEqual([r.id]);
   });
 
@@ -88,7 +88,7 @@ describe("outbox", () => {
     await saveReading(reading());
     const server = serverAccepting();
     await syncNow(server);
-    const sent = JSON.parse(String(server.mock.calls[0][1].body)).upserts[0];
+    const sent = JSON.parse(String(server.mock.calls[0][1]?.body)).upserts[0];
     expect(sent).not.toHaveProperty("syncState");
     expect(sent).not.toHaveProperty("createdAt");
   });
@@ -124,7 +124,7 @@ describe("outbox", () => {
     expect(await listReadings("p1")).toHaveLength(0); // hidden immediately
     const server = serverAccepting();
     await syncNow(server);
-    expect(JSON.parse(String(server.mock.calls[0][1].body)).deletes).toEqual([
+    expect(JSON.parse(String(server.mock.calls[0][1]?.body)).deletes).toEqual([
       r.id,
     ]);
     expect(await localDb().readings.count()).toBe(0);

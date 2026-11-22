@@ -101,6 +101,13 @@ export function syncNow(
   return queued;
 }
 
+/** Strip local-only bookkeeping so we send exactly the wire format. */
+function toWire(r: LocalReading): ReadingInput {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { syncState, rejectReason, deletedAt, createdAt, ...wire } = r;
+  return wire;
+}
+
 async function pushPending(fetchImpl: typeof fetch): Promise<void> {
   const db = localDb();
   const pending = await db.readings
@@ -109,10 +116,7 @@ async function pushPending(fetchImpl: typeof fetch): Promise<void> {
     .toArray();
   if (pending.length === 0) return;
 
-  // Strip local-only bookkeeping; send exactly the wire format.
-  const upserts = pending
-    .filter((r) => !r.deletedAt)
-    .map(({ syncState, rejectReason, deletedAt, createdAt, ...wire }) => wire);
+  const upserts = pending.filter((r) => !r.deletedAt).map(toWire);
   const deletes = pending.filter((r) => r.deletedAt).map((r) => r.id);
 
   let res: Response;
