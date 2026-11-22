@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { SyncStatus } from "@/components/ui/SyncStatus";
+import { AccountBanner } from "@/components/today/AccountBanner";
 import { TodayChecklist } from "@/components/today/TodayChecklist";
 import { LatestReadingCard } from "@/components/today/LatestReadingCard";
 import {
@@ -52,6 +53,7 @@ export function TodayLive() {
       )}
 
       <SyncStatus pending={pending} />
+      <AccountBanner />
     </>
   );
 }

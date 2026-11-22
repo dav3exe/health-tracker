@@ -141,3 +141,52 @@ describe("outbox", () => {
     ]);
   });
 });
+
+describe("pulling changes from other phones", () => {
+  it("adds readings from elsewhere, applies deletes, keeps local pending edits", async () => {
+    const { updateSettings } = await import("@/lib/offline/db");
+    await updateSettings({ activePatientId: "p1", lastPulledAt: {} });
+    const mine = await saveReading(reading()); // pending, unsent
+    const remote = reading();
+    const gone = reading();
+    await localDb().readings.put({
+      ...gone,
+      syncState: "synced",
+      createdAt: "2026-11-20T00:00:00Z",
+    });
+
+    const fetchImpl = vi.fn(async (url: RequestInfo | URL) => {
+      if (String(url).startsWith("/api/sync?")) {
+        return new Response(
+          JSON.stringify({
+            serverTime: "2026-11-22T20:00:00.000Z",
+            readings: [
+              { ...remote, deleted: false },
+              { ...gone, deleted: true },
+              // Server's older copy of a reading edited locally: ignored.
+              { ...mine, systolic: 999, deleted: false },
+            ],
+          }),
+        );
+      }
+      return new Response("", { status: 503 }); // push fails: stays pending
+    });
+    await syncNow(fetchImpl);
+
+    expect((await localDb().readings.get(remote.id))?.syncState).toBe("synced");
+    expect(await localDb().readings.get(gone.id)).toBeUndefined();
+    expect(await localDb().readings.get(mine.id)).toMatchObject({
+      systolic: 128,
+    });
+    const s = await localDb().settings.get("device");
+    expect(s?.lastPulledAt?.p1).toBe("2026-11-22T20:00:00.000Z");
+    await updateSettings({ activePatientId: null });
+  });
+
+  it("moves pre-signup readings onto the real patient", async () => {
+    const { reassignLocalReadings } = await import("@/lib/offline/outbox");
+    const r = await saveReading(reading({ patientId: "local-only" }));
+    await reassignLocalReadings("local-only", "p1");
+    expect((await localDb().readings.get(r.id))?.patientId).toBe("p1");
+  });
+});

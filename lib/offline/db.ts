@@ -27,6 +27,8 @@ export type DeviceSettings = {
   activePatientId: string | null;
   patientName?: string;
   glucoseUnit: GlucoseUnit;
+  /** Server time of the last successful pull, per patient (incremental sync). */
+  lastPulledAt?: Record<string, string>;
 };
 
 class HealthDb extends Dexie {

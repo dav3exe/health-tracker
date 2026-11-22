@@ -55,7 +55,7 @@ export function SavedView({ value, unit, detail, onUndo }: Props) {
         <p className="text-label text-text-muted">
           {pending > 0
             ? "Saved on this phone. It will sync when you're online."
-            : "Saved to your account."}
+            : "Backed up."}
         </p>
       </div>
 

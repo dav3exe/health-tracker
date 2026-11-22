@@ -1,4 +1,9 @@
-import { localDb, type LocalReading } from "@/lib/offline/db";
+import {
+  getSettings,
+  localDb,
+  updateSettings,
+  type LocalReading,
+} from "@/lib/offline/db";
 import { readingSchema, type ReadingInput } from "@/lib/validation/readings";
 
 // The outbox: save locally, then push to the server whenever possible.
@@ -87,9 +92,11 @@ export function syncNow(
   fetchImpl: typeof fetch = (...a) => fetch(...a),
 ): Promise<void> {
   if (!inFlight) {
-    inFlight = pushPending(fetchImpl).finally(() => {
-      inFlight = null;
-    });
+    inFlight = pushPending(fetchImpl)
+      .then(() => pullChanges(fetchImpl))
+      .finally(() => {
+        inFlight = null;
+      });
     return inFlight;
   }
   queued ??= inFlight
@@ -169,4 +176,81 @@ export function startAutoSync(): () => void {
     document.removeEventListener("visibilitychange", onVisible);
     window.clearInterval(timer);
   };
+}
+
+/** Readings that failed for a fixable reason (e.g. before setup) go again. */
+export async function retryRejected(): Promise<void> {
+  await localDb()
+    .readings.where("syncState")
+    .equals("rejected")
+    .modify({ syncState: "pending", rejectReason: undefined });
+  void syncNow();
+}
+
+/**
+ * Move readings logged on this phone before it was linked to a patient onto
+ * that patient. Only unsynced rows move: synced ones already belong to a
+ * patient on the server and must never be reassigned.
+ */
+export async function reassignLocalReadings(
+  fromPatientId: string,
+  toPatientId: string,
+): Promise<void> {
+  if (fromPatientId === toPatientId) return;
+  await localDb()
+    .readings.where("[patientId+measuredAt]")
+    .between([fromPatientId, ""], [fromPatientId, "\uffff"])
+    .filter((r) => r.syncState !== "synced")
+    .modify({
+      patientId: toPatientId,
+      syncState: "pending",
+      rejectReason: undefined,
+    });
+}
+
+type PullResponse = {
+  serverTime: string;
+  readings: (ReadingInput & { deleted: boolean })[];
+};
+
+// Bring in readings logged on OTHER phones for the active patient, so a
+// caregiver and the patient see the same History.
+async function pullChanges(fetchImpl: typeof fetch): Promise<void> {
+  const settings = await getSettings();
+  const patientId = settings.activePatientId;
+  if (!patientId) return;
+  const since = settings.lastPulledAt?.[patientId];
+  const qs = new URLSearchParams({ patientId, ...(since && { since }) });
+
+  let res: Response;
+  try {
+    res = await fetchImpl(`${SYNC_ENDPOINT}?${qs}`);
+  } catch {
+    return;
+  }
+  // 401 (signed out) / 403 (not linked yet) / 5xx: nothing to merge.
+  if (!res.ok) return;
+  const body = (await res.json()) as PullResponse;
+
+  const db = localDb();
+  await db.transaction("rw", db.readings, async () => {
+    for (const { deleted, ...r } of body.readings) {
+      const local = await db.readings.get(r.id);
+      // Never overwrite an edit or undo made on this phone that hasn't been
+      // sent yet: the local change is newer and will sync next.
+      if (local && local.syncState !== "synced") continue;
+      if (deleted) {
+        await db.readings.delete(r.id);
+      } else {
+        await db.readings.put({
+          ...readingSchema.parse(r),
+          syncState: "synced",
+          createdAt: local?.createdAt ?? new Date().toISOString(),
+        });
+      }
+    }
+  });
+  await updateSettings({
+    lastPulledAt: { ...settings.lastPulledAt, [patientId]: body.serverTime },
+  });
 }
