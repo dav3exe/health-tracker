@@ -50,30 +50,36 @@ export function LatestReadingCard({ reading }: { reading: LatestBp }) {
 
       {reading.target && <TargetBadge status={reading.target} />}
 
-      <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border-subtle pt-4">
-        {reading.pulse !== undefined && (
-          <div>
-            <dt className="text-small text-text-muted">Pulse</dt>
-            <dd className="tabular text-title font-bold">
-              {reading.pulse}{" "}
-              <span className="text-small font-normal text-text-muted">
-                bpm
-              </span>
-            </dd>
-          </div>
-        )}
-        <div>
-          <dt className="text-small text-text-muted">7-day average</dt>
-          <dd className="tabular text-title font-bold">
-            {reading.weekAverage
-              ? `${reading.weekAverage.systolic}/${reading.weekAverage.diastolic}`
-              : "–"}
-          </dd>
-          <dd className="text-small text-text-muted">
-            <WeekChange change={reading.weekChange} />
-          </dd>
-        </div>
-      </dl>
+      {/* Secondary stats only when there's something to show. The 7-day
+          average comes from server stats (Milestone 2), never computed here. */}
+      {(reading.pulse !== undefined || reading.weekAverage) && (
+        <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-border-subtle pt-4">
+          {reading.pulse !== undefined && (
+            <div>
+              <dt className="text-small text-text-muted">Pulse</dt>
+              <dd className="tabular text-title font-bold">
+                {reading.pulse}{" "}
+                <span className="text-small font-normal text-text-muted">
+                  bpm
+                </span>
+              </dd>
+            </div>
+          )}
+          {reading.weekAverage && (
+            <div>
+              <dt className="text-small text-text-muted">7-day average</dt>
+              <dd className="tabular text-title font-bold">
+                {reading.weekAverage
+                  ? `${reading.weekAverage.systolic}/${reading.weekAverage.diastolic}`
+                  : "–"}
+              </dd>
+              <dd className="text-small text-text-muted">
+                <WeekChange change={reading.weekChange} />
+              </dd>
+            </div>
+          )}
+        </dl>
+      )}
     </section>
   );
 }

@@ -2,41 +2,19 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { Droplet, HeartPulse, Settings } from "lucide-react";
 import { BigButton } from "@/components/ui/BigButton";
-import { SyncStatus } from "@/components/ui/SyncStatus";
 import { Greeting, GreetingFallback } from "@/components/today/Greeting";
-import {
-  TodayChecklist,
-  type ChecklistItem,
-} from "@/components/today/TodayChecklist";
-import {
-  LatestReadingCard,
-  type LatestBp,
-} from "@/components/today/LatestReadingCard";
+import { TodayLive } from "@/components/today/TodayLive";
+import { ClientOnly } from "@/components/providers/ClientOnly";
 import { BottomNav } from "@/components/nav/BottomNav";
 
 // The "Today" screen: the home screen and the start of the 10-second logging
 // path (PLAN.md §5.2). Order matters: the two big logging buttons come first,
 // above the fold on the smallest phones, because logging is why the app is
 // opened 95% of the time. The checklist comes second, as reassurance.
-
-// MILESTONE 0 PLACEHOLDER: static sample data so the design can be reviewed.
-// Milestone 1 replaces this with today's real readings for the selected
-// patient, fetched through lib/db/ (never directly from here).
-const sampleChecklist: ChecklistItem[] = [
-  { id: "bp_am", label: "Morning blood pressure", doneAt: "7:42" },
-  { id: "glucose_fasting", label: "Blood sugar (fasting)" },
-  { id: "bp_pm", label: "Evening blood pressure" },
-];
-
-const sampleLatest: LatestBp = {
-  systolic: 128,
-  diastolic: 82,
-  pulse: 71,
-  when: "This morning, 7:42",
-  weekAverage: { systolic: 131, diastolic: 84 },
-  weekChange: -3,
-  target: "in",
-};
+//
+// The buttons are static and render instantly from the prerendered shell.
+// Only the live part (checklist, latest reading, sync status) waits for the
+// phone's database, so the screen is usable immediately.
 
 export default function TodayPage() {
   return (
@@ -73,13 +51,17 @@ export default function TodayPage() {
           />
         </div>
 
-        <TodayChecklist items={sampleChecklist} />
-
-        {/* Below the checklist on purpose: logging and "what's left" come
-            first; looking back at the last reading is secondary. */}
-        <LatestReadingCard reading={sampleLatest} />
-
-        <SyncStatus />
+        <ClientOnly
+          fallback={
+            // Same footprint as the checklist card, so nothing jumps.
+            <div
+              aria-hidden
+              className="h-80 rounded-card border border-border-subtle bg-surface-muted"
+            />
+          }
+        >
+          <TodayLive />
+        </ClientOnly>
       </main>
 
       <BottomNav />

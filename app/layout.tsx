@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { OfflineProvider } from "@/components/providers/OfflineProvider";
 
 export const metadata: Metadata = {
   title: {
@@ -23,7 +24,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <OfflineProvider>{children}</OfflineProvider>
+      </body>
     </html>
   );
 }

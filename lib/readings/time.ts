@@ -43,3 +43,27 @@ export const GLUCOSE_CONTEXT_LABEL: Record<GlucoseContext, string> = {
 export function deviceTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
+
+/**
+ * ISO 8601 with the device's UTC offset, e.g. "2026-11-22T07:42:00+01:00".
+ * Keeping the offset (not just "Z") means a reading is still unambiguous and
+ * human-checkable if it ever needs debugging; the server stores it as UTC.
+ */
+export function toIsoWithOffset(d: Date): string {
+  const pad = (n: number) => String(Math.abs(n)).padStart(2, "0");
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
+    `T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}` +
+    `${sign}${pad(Math.trunc(off / 60))}:${pad(off % 60)}`
+  );
+}
+
+/** "7:42" in the device's locale, for confirmations and lists. */
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
