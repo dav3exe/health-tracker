@@ -170,3 +170,28 @@ accident and easy to test.
 - Test matrix: every repository function × {owner, caregiver, viewer, stranger}.
 - Role rules: read = any role; write readings = owner/caregiver; manage access,
   export-all, delete patient = owner.
+
+---
+
+## ADR-010: Component library — shadcn/ui (Radix)
+
+**Status:** Accepted (owner's choice)
+
+**Decision:** shadcn/ui on Radix primitives. Components are copied into
+`components/ui/` and owned by us.
+
+**Why:** Radix gets the hard accessibility parts right (focus trapping,
+keyboard support, screen-reader roles) for dialogs, toggle groups and tabs.
+Because the code lives in our repo, we restyle it freely.
+
+**How we keep it on-brand and accessible:**
+
+- shadcn's CSS variable names (`--primary`, `--background`, …) are **aliases of
+  our tokens** in `app/globals.css`, so every component is white-and-red and
+  covered by the contrast test.
+- Stock sizes (24–36px controls, 12–14px text) are replaced with our 56px+ /
+  16px+ scale; small size variants are deleted.
+- `cn` is configured (`lib/utils.ts`) to know our custom text sizes; the stock
+  helper silently dropped `text-body` when combined with a colour class.
+- After any `npx shadcn add`, change `from "cn"` to `from "@/lib/utils"` and
+  resize the new component before using it.

@@ -25,7 +25,8 @@ to `.env.local` first)
 Next.js (App Router) + React + TypeScript (strict), Tailwind CSS, TanStack Query,
 PWA via Serwist, Dexie for the offline outbox, MongoDB Atlas + Mongoose, Zod
 (shared client/server validation), Auth.js with the MongoDB adapter,
-`@react-pdf/renderer` in a route handler for reports, Vitest
+shadcn/ui (Radix) restyled to our tokens — see ADR-010 for the post-`shadcn add`
+checklist, `@react-pdf/renderer` in a route handler for reports, Vitest
 (+ `mongodb-memory-server`) and Playwright for tests.
 
 ## Hard rules
