@@ -243,3 +243,29 @@ instructions. Watch and time:
 4. Finding yesterday's reading.
 
 Note every hesitation. Fix those before building anything new.
+
+---
+
+## 9. Visual inspiration (inspora.design)
+
+References picked from [inspora.design](https://www.inspora.design/) (Product
+category). We borrow **structure**, not their sizes: most references use
+11–13 px labels and low-contrast greys, which fail §2. Every borrowed pattern
+is scaled up to our type scale and contrast rules.
+
+| Reference                                    | What we take                                                                                                                                                                                                                                                                | Where it goes                                                                                     |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| **Sleep tracking dashboard UI** (white card) | Hero number with a small unit beside it ("84 /100"); a row of secondary stats, each with a small change note; Day/Week/Month segmented control top-right; period label with a coloured dot ("● This month Oct 7 – Nov 5"); a proportion bar with a legend that shows values | Today → Latest reading card (done); Trends screen header, stat tiles and period switcher (M2)     |
+| **Patient funnel visualization**             | Stat columns: small label → big number → percentage underneath; one tinted pill to call out the key insight ("−28.2% biggest drop-off")                                                                                                                                     | Trends stat rows; "% in target" tiles; one highlight pill per metric (M2); PDF summary tiles (M3) |
+| **Onboarding for anything**                  | One idea per screen, large headline near the bottom, full-width pill "Continue" button, "Skip ›" top-right, progress dots                                                                                                                                                   | Onboarding wizard (M1 minimal, M6 full)                                                           |
+
+**Adaptations for our users**
+
+- Change notes stay **neutral grey with an arrow and words**, never green/red:
+  a lower blood pressure isn't automatically good, and colouring it would be
+  a medical judgement.
+- Segmented controls get 56 px segments and full words ("6 months", not "6M").
+- The coloured dot is the brand red and purely decorative; the label text
+  carries the meaning.
+- No glassmorphism or blur over content: it lowers contrast and costs
+  battery on cheap phones.

@@ -8,6 +8,10 @@ import {
   TodayChecklist,
   type ChecklistItem,
 } from "@/components/today/TodayChecklist";
+import {
+  LatestReadingCard,
+  type LatestBp,
+} from "@/components/today/LatestReadingCard";
 import { BottomNav } from "@/components/nav/BottomNav";
 
 // The "Today" screen: the home screen and the start of the 10-second logging
@@ -23,6 +27,16 @@ const sampleChecklist: ChecklistItem[] = [
   { id: "glucose_fasting", label: "Blood sugar (fasting)" },
   { id: "bp_pm", label: "Evening blood pressure" },
 ];
+
+const sampleLatest: LatestBp = {
+  systolic: 128,
+  diastolic: 82,
+  pulse: 71,
+  when: "This morning, 7:42",
+  weekAverage: { systolic: 131, diastolic: 84 },
+  weekChange: -3,
+  target: "in",
+};
 
 export default function TodayPage() {
   return (
@@ -60,6 +74,10 @@ export default function TodayPage() {
         </div>
 
         <TodayChecklist items={sampleChecklist} />
+
+        {/* Below the checklist on purpose: logging and "what's left" come
+            first; looking back at the last reading is secondary. */}
+        <LatestReadingCard reading={sampleLatest} />
 
         <SyncStatus />
       </main>
