@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "@fontsource/atkinson-hyperlegible-next/400.css";
+@import "@fontsource/atkinson-hyperlegible-next/700.css";
+
+/*
+ * Design tokens: the single source of truth for colour and type.
+ * See docs/DESIGN.md §3. tests/design-tokens.test.ts parses this file and
+ * fails CI if any text/background pair drops below its contrast requirement,
+ * so accessibility can't regress quietly when someone tweaks a colour.
+ *
+ * Brand: white with red accents. Red is the brand colour, so "flagged" can't
+ * rely on red alone. Flags use a darker red PLUS a ⚠ icon PLUS the words
+ * "Check with doctor" in a filled banner. Never colour alone (DESIGN.md §1).
+ */
+:root {
+  /* Surfaces */
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-muted: #faf7f7; /* faint warm tint separates sections without lines */
+
+  /* Text: body is AAA (≥ 7:1) on white */
+  --text: #1a1a1a;
+  --text-muted: #4a4a4a;
+
+  /* Borders: inputs need ≥ 3:1 to be visible to low-vision users;
+     subtle borders are decorative only (card edges) */
+  --border-strong: #8a8a8a;
+  --border-subtle: #ece6e6;
+
+  /* Brand red. #a8101a is 7.6:1 on white, so it passes AAA even for normal
+     text, which lets us use it for links and labels, not just big buttons. */
+  --primary: #a8101a;
+  --primary-hover: #8e0e16;
+  --on-primary: #ffffff;
+  --primary-soft: #fdf2f2; /* highlight backgrounds: selected chips, done items */
+  --primary-soft-border: #f3c4c7;
+
+  /* Status colours: always paired with an icon and a word */
+  --ok: #1e6b3a;
+  --ok-soft: #edf7f0;
+  --watch: #8a5a00;
+  --watch-soft: #fdf6e7;
+  --flag: #7a1015; /* darker than brand so a flag banner reads as distinct */
+  --on-flag: #ffffff;
+
+  --focus-ring: #1a1a1a; /* black ring is visible on both white and red */
+
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-border-strong: var(--border-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-border: var(--primary-soft-border);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-watch: var(--watch);
+  --color-watch-soft: var(--watch-soft);
+  --color-flag: var(--flag);
+  --color-on-flag: var(--on-flag);
+
+  /* Atkinson Hyperlegible was designed by the Braille Institute for low-vision
+     readers: it makes easily confused characters (1/l/I, 0/O, 6/8) distinct,
+     which matters when the content is mostly numbers. Self-hosted via
+     fontsource so it works offline and costs no third-party request. */
+  --font-sans:
+    "Atkinson Hyperlegible Next", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+
+  /* Type scale (DESIGN.md §3). Body is 20px, larger than the web's usual 16px,
+     because the main users are older and often read without their glasses. */
+  --text-body: 1.25rem;
+  --text-body--line-height: 1.5;
+  --text-label: 1.125rem;
+  --text-label--line-height: 1.4;
+  --text-small: 1rem; /* the floor: nothing smaller anywhere */
+  --text-small--line-height: 1.4;
+  --text-title: 1.75rem;
+  --text-title--line-height: 1.25;
+  --text-reading: 3rem;
+  --text-reading--line-height: 1.1;
+  --text-hero: 4rem;
+  --text-hero--line-height: 1;
+
+  --radius-card: 1.25rem;
+  --radius-button: 1rem;
+
+  --shadow-card:
+    0 1px 2px rgb(26 26 26 / 0.04), 0 4px 16px rgb(26 26 26 / 0.06);
+  --shadow-primary: 0 6px 20px rgb(168 16 26 / 0.28);
+}
+
+@layer base {
+  html {
+    /* Respect the user's own font-size setting: rem units scale with it,
+       so someone who set "large text" on their phone gets it here too. */
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.5;
+  }
+
+  /* Numbers line up in lists and tables, and don't shift width while typing. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* A thick, high-contrast focus ring for keyboard and switch-access users.
+     :focus-visible keeps it off for taps, so it doesn't confuse touch users. */
+  :focus-visible {
+    outline: 3px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

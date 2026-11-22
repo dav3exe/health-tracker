@@ -9,6 +9,7 @@ Status values: `Proposed` (recommended, not yet confirmed) · `Accepted` · `Sup
 ---
 
 ## ADR-001: Database — MongoDB
+
 **Status:** Accepted (owner's choice; supersedes the earlier Supabase proposal)
 **Question:** Which backend and database?
 
@@ -16,6 +17,7 @@ Status values: `Proposed` (recommended, not yet confirmed) · `Accepted` · `Sup
 code (route handlers, server actions, server components).
 
 **Why:**
+
 - Owner's preferred, familiar stack — speed of building matters more than
   theoretical fit.
 - The data is document-shaped: a patient with embedded targets, thresholds,
@@ -25,6 +27,7 @@ code (route handlers, server actions, server components).
   per-timezone daily, weekly and AM/PM bucketing.
 
 **Consequences we accept and design around:**
+
 - **No row-level security** → [ADR-009](#adr-009-access-control-without-row-level-security).
 - **No foreign keys or DB-level referential integrity** → repositories own
   writes; Mongoose schemas + Zod validate; deletes of a patient cascade in code.
@@ -37,6 +40,7 @@ code (route handlers, server actions, server components).
 ---
 
 ## ADR-002: Patients are not users
+
 **Status:** Proposed
 
 **Decision:** `patients` is a profile; `users` are people who sign in;
@@ -49,6 +53,7 @@ This also gives us multi-caregiver and viewer access for free.
 ---
 
 ## ADR-003: Reminder channels
+
 **Status:** Proposed
 **Question:** Web push only, or WhatsApp/SMS from the start?
 
@@ -56,8 +61,9 @@ This also gives us multi-caregiver and viewer access for free.
 **WhatsApp** is the second channel (Milestone 6). SMS only as a fallback.
 
 **Why:**
+
 - Web push costs nothing and needs no third-party approval, so we can test
-  reminder *timing and wording* early.
+  reminder _timing and wording_ early.
 - WhatsApp is what many users actually read (especially in Nigeria and
   similar markets), but the WhatsApp Business API needs a verified business
   and **pre-approved message templates**, which takes time. Start that
@@ -69,6 +75,7 @@ This also gives us multi-caregiver and viewer access for free.
 ---
 
 ## ADR-004: PDF generation
+
 **Status:** Proposed
 
 **Decision:** `@react-pdf/renderer` inside a Next.js route handler
@@ -86,6 +93,7 @@ reuse of web styles, but heavier to host. Revisit if react-pdf layout limits bit
 ---
 
 ## ADR-005: Report page 1
+
 **Status:** Proposed — **needs a real doctor's input**
 **Question:** Does the doctor want specific fields on page 1?
 
@@ -98,11 +106,13 @@ and ask: "What do you look at first? What's missing? What's noise?"
 ---
 
 ## ADR-006: Who logs — patient or caregiver?
+
 **Status:** Proposed
 **Question:** Should patients log themselves, or mostly the caregiver?
 
 **Decision:** design for **both**, and prioritise the **patient's logging
 screen** for simplicity, because:
+
 - If the patient logs, the 10-second screen is all they ever see — it must be perfect.
 - A remote caregiver can't take a reading; they can only enter one that was
   read to them. So the patient's phone (or someone with them) is where most
@@ -116,6 +126,7 @@ clutter). Caregivers see everything.
 ---
 
 ## ADR-007: Rolling comparison windows
+
 **Status:** Proposed
 
 **Decision:** week = last 7 days vs prior 7; month = last 30 vs prior 30;
@@ -127,6 +138,7 @@ in the week/month. Rolling windows are always comparable.
 ---
 
 ## ADR-008: Canonical units and time
+
 **Status:** Accepted (from the original spec)
 
 - Glucose stored only as mg/dL (`numeric(5,1)`), converted for display with
@@ -137,6 +149,7 @@ in the week/month. Rolling windows are always comparable.
 ---
 
 ## ADR-009: Access control without row-level security
+
 **Status:** Accepted
 
 **Decision:** all database access goes through a single server-side data layer
@@ -150,6 +163,7 @@ Funnelling everything through one module makes the check impossible to skip by
 accident and easy to test.
 
 **Guardrails:**
+
 - Route handlers / server actions / components never import the Mongo client
   or models directly — an ESLint `no-restricted-imports` rule enforces it.
 - `import 'server-only'` in `lib/db/*` so DB code can never ship to the browser.

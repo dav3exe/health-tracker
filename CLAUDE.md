@@ -1,8 +1,17 @@
 # Working agreement for this repo
 
 Read `docs/PLAN.md`, `docs/DESIGN.md`, and `docs/DECISIONS.md` before changing code.
+Also read `AGENTS.md`: this is Next.js 16, which differs from older versions
+(Cache Components, `io()`, typed `LayoutProps`). Check `node_modules/next/dist/docs/`.
+
+## Commands
+
+`npm run dev` · `npm run typecheck` · `npm run lint` · `npm test` ·
+`npm run format` · `npm run db:up` (local MongoDB in Docker; copy `.env.example`
+to `.env.local` first)
 
 ## How we build
+
 - **One file at a time.** Deliver a single file per step, matching existing file
   boundaries. Don't sprawl changes across the codebase.
 - **Comment the why, not the what.** Every non-obvious decision gets a short
@@ -12,6 +21,7 @@ Read `docs/PLAN.md`, `docs/DESIGN.md`, and `docs/DECISIONS.md` before changing c
 - If a decision in `docs/DECISIONS.md` changes, update the ADR in the same change.
 
 ## Stack
+
 Next.js (App Router) + React + TypeScript (strict), Tailwind CSS, TanStack Query,
 PWA via Serwist, Dexie for the offline outbox, MongoDB Atlas + Mongoose, Zod
 (shared client/server validation), Auth.js with the MongoDB adapter,
@@ -19,6 +29,7 @@ PWA via Serwist, Dexie for the offline outbox, MongoDB Atlas + Mongoose, Zod
 (+ `mongodb-memory-server`) and Playwright for tests.
 
 ## Hard rules
+
 - **Stats live in `lib/stats/`** (`getPeriodStats`, `getSeries`, aggregation
   pipelines). React only formats.
   The dashboard and PDF must never compute numbers separately.

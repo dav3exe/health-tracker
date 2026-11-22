@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      # Includes the design-token contrast test: CI fails if a colour change
+      # breaks the accessibility rules in docs/DESIGN.md §2.
+      - run: npm test
+      # Building catches Cache Components / prerender errors that typecheck
+      # can't. A dummy URI is enough: nothing connects to the DB at build time.
+      - run: npm run build
+        env:
+          MONGODB_URI: mongodb://localhost:27017/ci

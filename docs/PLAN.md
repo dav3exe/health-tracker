@@ -4,7 +4,7 @@ A low-friction app for logging **blood pressure** and **blood sugar** at home,
 seeing how things are trending week to week, and handing a clear **1–2 page PDF
 report** to a doctor.
 
-It is built for the person taking the readings *and* for the family member or
+It is built for the person taking the readings _and_ for the family member or
 carer who helps them. One caregiver can look after several people; one person
 can have several caregivers.
 
@@ -17,6 +17,7 @@ can have several caregivers.
 ## 1. Goals, non-goals, and how we'll know it works
 
 ### Goals
+
 1. **Log a reading in ~10 seconds** from opening the app. Low friction is the
    whole game: if logging is annoying, there is no data and nothing else matters.
 2. **Trend comparisons** for week, month and 6 months, each against the previous
@@ -26,20 +27,22 @@ can have several caregivers.
 5. **Works with no signal.** Readings are saved on the phone and synced later.
 
 ### Non-goals (v1)
-- No diagnosis, no medical advice, no dosing suggestions. The app *logs and
-  flags*. Flags always say "consider contacting your doctor".
+
+- No diagnosis, no medical advice, no dosing suggestions. The app _logs and
+  flags_. Flags always say "consider contacting your doctor".
 - No Bluetooth/device integration, no CGM.
 - No doctor login portal — doctors get the PDF (or a share link later).
 - No social/gamification features.
 
 ### Success measures (check after 4 weeks of real use)
-| Measure | Target |
-|---|---|
-| Median time from app open → reading saved | ≤ 10 s |
-| Days with at least one reading / days in period | ≥ 80 % |
-| Readings that needed a "did you mean?" correction | tracked, trending down |
-| Doctor feedback on report | "I could read it at a glance" |
-| Readings lost while offline | 0 |
+
+| Measure                                           | Target                        |
+| ------------------------------------------------- | ----------------------------- |
+| Median time from app open → reading saved         | ≤ 10 s                        |
+| Days with at least one reading / days in period   | ≥ 80 %                        |
+| Readings that needed a "did you mean?" correction | tracked, trending down        |
+| Doctor feedback on report                         | "I could read it at a glance" |
+| Readings lost while offline                       | 0                             |
 
 ---
 
@@ -47,8 +50,8 @@ can have several caregivers.
 
 The original spec tied "patient" to a login account. That breaks a common real
 case: **the person being tracked may never use the app themselves** (no
-smartphone, or the caregiver does all the logging). So we split *who is
-tracked* from *who logs in*:
+smartphone, or the caregiver does all the logging). So we split _who is
+tracked_ from _who logs in_:
 
 - **Patient** — a health profile (name, DOB, targets, readings). Does **not**
   require a login.
@@ -58,7 +61,7 @@ tracked* from *who logs in*:
     patient themselves, or the caregiver who created the profile.
   - `caregiver` — log, view, export, receive alerts.
   - `viewer` — view and export only (e.g. a sibling who wants to keep an eye on things).
-- A patient who *does* want to log themselves is simply a user linked to their
+- A patient who _does_ want to log themselves is simply a user linked to their
   own profile as `owner`.
 
 This generalises the spec's `caregiver_links(caregiver_id, patient_id)` into
@@ -74,24 +77,24 @@ remember, no OTP codes to read out over the phone.
 
 ## 3. Stack
 
-| Layer | Choice | Why |
-|---|---|---|
-| App | **Next.js (App Router) + React + TypeScript**, Tailwind CSS | One codebase for UI and API; server code (DB access, PDF, cron) lives next to the screens that use it |
-| Client data | TanStack Query | Caching and optimistic updates for logging; works alongside the offline outbox |
-| PWA | Serwist (`@serwist/next`) | Maintained successor to `next-pwa`; installable app + offline app shell |
-| Offline store | IndexedDB via Dexie | Durable outbox for readings saved without signal |
-| Database | **MongoDB Atlas** + Mongoose | See [ADR-001](./DECISIONS.md#adr-001-database-mongodb). Encryption at rest on by default; free tier to start |
-| Validation | Zod, shared by client and server | Same rules on the form and in the API, so a bad reading can't sneak in through sync |
-| Auth | Auth.js (NextAuth v5) with the MongoDB adapter | Magic-link sign-in + our own invite-link flow for patients' phones |
-| Access control | One server-side data-access layer (`lib/db/access.ts`) | MongoDB has no row-level security, so **every** query goes through one module that checks membership. See [ADR-009](./DECISIONS.md#adr-009-access-control-without-row-level-security) |
-| Stats | MongoDB aggregation pipelines in one shared module (`lib/stats/`) | One source of truth for dashboard + PDF |
-| PDF | `@react-pdf/renderer` in a Next.js route handler (Node runtime) | See [ADR-004](./DECISIONS.md#adr-004-pdf-generation). Identical output on every device |
-| Charts (UI) | Recharts | Simple, SVG, works with the target-band pattern |
-| Reminders | Web Push first, behind a `ReminderChannel` interface; WhatsApp next | See [ADR-003](./DECISIONS.md#adr-003-reminder-channels) |
-| Scheduler | Cron hitting a protected route handler (e.g. Vercel Cron) | No extra server to run |
-| Hosting | Vercel (app) + MongoDB Atlas (data) | Both have free tiers; move to paid when real people rely on it |
-| Testing | Vitest (unit + stats against `mongodb-memory-server`), Playwright (E2E) | Stats and access rules are where bugs hurt most |
-| CI | GitHub Actions: typecheck, lint, test | |
+| Layer          | Choice                                                                  | Why                                                                                                                                                                                   |
+| -------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App            | **Next.js (App Router) + React + TypeScript**, Tailwind CSS             | One codebase for UI and API; server code (DB access, PDF, cron) lives next to the screens that use it                                                                                 |
+| Client data    | TanStack Query                                                          | Caching and optimistic updates for logging; works alongside the offline outbox                                                                                                        |
+| PWA            | Serwist (`@serwist/next`)                                               | Maintained successor to `next-pwa`; installable app + offline app shell                                                                                                               |
+| Offline store  | IndexedDB via Dexie                                                     | Durable outbox for readings saved without signal                                                                                                                                      |
+| Database       | **MongoDB Atlas** + Mongoose                                            | See [ADR-001](./DECISIONS.md#adr-001-database-mongodb). Encryption at rest on by default; free tier to start                                                                          |
+| Validation     | Zod, shared by client and server                                        | Same rules on the form and in the API, so a bad reading can't sneak in through sync                                                                                                   |
+| Auth           | Auth.js (NextAuth v5) with the MongoDB adapter                          | Magic-link sign-in + our own invite-link flow for patients' phones                                                                                                                    |
+| Access control | One server-side data-access layer (`lib/db/access.ts`)                  | MongoDB has no row-level security, so **every** query goes through one module that checks membership. See [ADR-009](./DECISIONS.md#adr-009-access-control-without-row-level-security) |
+| Stats          | MongoDB aggregation pipelines in one shared module (`lib/stats/`)       | One source of truth for dashboard + PDF                                                                                                                                               |
+| PDF            | `@react-pdf/renderer` in a Next.js route handler (Node runtime)         | See [ADR-004](./DECISIONS.md#adr-004-pdf-generation). Identical output on every device                                                                                                |
+| Charts (UI)    | Recharts                                                                | Simple, SVG, works with the target-band pattern                                                                                                                                       |
+| Reminders      | Web Push first, behind a `ReminderChannel` interface; WhatsApp next     | See [ADR-003](./DECISIONS.md#adr-003-reminder-channels)                                                                                                                               |
+| Scheduler      | Cron hitting a protected route handler (e.g. Vercel Cron)               | No extra server to run                                                                                                                                                                |
+| Hosting        | Vercel (app) + MongoDB Atlas (data)                                     | Both have free tiers; move to paid when real people rely on it                                                                                                                        |
+| Testing        | Vitest (unit + stats against `mongodb-memory-server`), Playwright (E2E) | Stats and access rules are where bugs hurt most                                                                                                                                       |
+| CI             | GitHub Actions: typecheck, lint, test                                   |                                                                                                                                                                                       |
 
 ---
 
@@ -228,6 +231,7 @@ own automated tests.
 ## 5. Features
 
 ### 5.1 Onboarding (short wizard, everything after step 1 skippable)
+
 1. **Who is this for?** "Me" / "Someone I care for" → name, timezone (auto-detected).
 2. **What do you track?** BP / blood sugar / both → glucose unit.
 3. **Targets from your doctor** — optional; can be added later. Clear note:
@@ -235,25 +239,26 @@ own automated tests.
 4. **Medications** — name, dose, times.
 5. **Reminders** — suggested times (BP 07:00 and 19:00), editable.
 6. **Consent** — plain-language explanation + explicit checkbox; recorded in `consents`.
-7. *(Caregiver flow)* **Set up their phone** — show invite QR / link.
+7. _(Caregiver flow)_ **Set up their phone** — show invite QR / link.
 
 DOB, sex, height, weight, conditions, doctor details: on the profile page,
 filled in whenever. Don't front-load them.
 
 ### 5.2 Daily logging
-- Home screen = **"Today"**: big buttons *Blood pressure* and *Blood sugar*,
+
+- Home screen = **"Today"**: big buttons _Blood pressure_ and _Blood sugar_,
   plus a checklist of today's expected readings (✓ Morning BP, ○ Evening BP).
 - **BP form:** three large numeric fields (top / bottom / pulse) with plain
   labels ("Top number", "Bottom number", "Pulse"). AM/PM is **inferred from the
   time** (editable), not asked.
 - **Glucose form:** one numeric field + context chips. Context defaults sensibly
-  from time of day (e.g. before 09:00 → *Fasting*), one tap to change.
+  from time of day (e.g. before 09:00 → _Fasting_), one tap to change.
 - **Validation — three tiers:**
-  - *Impossible* → block with an explanation (diastolic ≥ systolic, ≤ 0, non-numeric).
-  - *Unusual* → gentle "Did you mean…?" confirm: systolic outside 70–250,
+  - _Impossible_ → block with an explanation (diastolic ≥ systolic, ≤ 0, non-numeric).
+  - _Unusual_ → gentle "Did you mean…?" confirm: systolic outside 70–250,
     diastolic outside 40–150, pulse outside 35–200, glucose outside 30–600 mg/dL
     (1.7–33.3 mmol/L). E.g. `1200/80` → "Did you mean 120/80?"
-  - *Unit slip* → in mg/dL mode a value < 35 asks "Did you mean 5.6 mmol/L
+  - _Unit slip_ → in mg/dL mode a value < 35 asks "Did you mean 5.6 mmol/L
     (= 101 mg/dL)?"; in mmol mode a value > 35 asks the reverse.
 - **After save:** a full-width "Saved ✓" with the value repeated back and an
   **Undo** button for 10 s. Undo beats "Are you sure?" dialogs.
@@ -267,11 +272,12 @@ filled in whenever. Don't front-load them.
 ### 5.3 Comparisons and charts
 
 **Periods** (rolling, in the patient's local time):
-| View | Current period | Compared with | Chart points |
-|---|---|---|---|
-| Week | last 7 days incl. today | the 7 days before | each reading |
-| Month | last 30 days | the 30 days before | daily averages |
-| 6 months | last 182 days | the 182 days before | weekly averages |
+
+| View     | Current period          | Compared with       | Chart points    |
+| -------- | ----------------------- | ------------------- | --------------- |
+| Week     | last 7 days incl. today | the 7 days before   | each reading    |
+| Month    | last 30 days            | the 30 days before  | daily averages  |
+| 6 months | last 182 days           | the 182 days before | weekly averages |
 
 Rolling windows avoid the "it's Monday, so this week looks empty" problem of
 calendar weeks.
@@ -282,7 +288,8 @@ glucose fasting vs post-meal average; logging consistency (days with ≥ 1
 reading ÷ days in period).
 
 **Definitions (so dashboard and PDF can't disagree):**
-- *Morning* = 04:00–11:59 local, *Evening* = 17:00–23:59 local; other readings
+
+- _Morning_ = 04:00–11:59 local, _Evening_ = 17:00–23:59 local; other readings
   count toward totals but not the AM/PM split.
 - **Minimum data rule:** if either period has fewer than 3 readings for a
   metric, show "Not enough readings to compare" instead of a delta. A delta
@@ -300,12 +307,13 @@ flagged readings drawn with a distinct **shape** (not just colour). See
 `DESIGN.md §6`.
 
 ### 5.4 Alerts (flag only)
+
 - Evaluated **server-side** in the shared "save reading" function (used by
   both the form and offline sync), so a reading synced from offline still flags. Persisted to `flags`.
 - Thresholds from `alert_thresholds`, defaults labelled
-  *"Default safety values — please confirm with your doctor."*
-- Wording (fixed, reviewed): *"This reading is outside the usual range.
-  Consider contacting your doctor."* Never names a condition or a treatment.
+  _"Default safety values — please confirm with your doctor."_
+- Wording (fixed, reviewed): _"This reading is outside the usual range.
+  Consider contacting your doctor."_ Never names a condition or a treatment.
 - If a reading is in the danger zone, the patient sees the message immediately
   on the save screen, plus "If you feel unwell, seek medical help now."
 - Caregivers with `notify_on_flags` get notified through their reminder channel.
@@ -315,6 +323,7 @@ flagged readings drawn with a distinct **shape** (not just colour). See
 ### 5.5 Doctor report (PDF)
 
 **Page 1 — the one-minute read** (draft; confirm with a real doctor before polishing):
+
 1. Header: patient name, age, sex, date range, "Home readings, self-measured",
    generated date.
 2. Summary tiles: average BP, average fasting glucose, % in target, change vs
@@ -322,28 +331,26 @@ flagged readings drawn with a distinct **shape** (not just colour). See
 3. **Flagged readings** table (date/time, value, context).
 4. Current medications.
 
-**Page 2 — patterns:**
-5. Trend chart per metric with target band.
-6. Time-of-day patterns: AM vs PM BP; fasting vs post-meal glucose.
-7. Medication adherence %, symptom notes.
+**Page 2 — patterns:** 5. Trend chart per metric with target band. 6. Time-of-day patterns: AM vs PM BP; fasting vs post-meal glucose. 7. Medication adherence %, symptom notes.
 
 **Appendix (page 3+):** full raw log table.
 
-Footer on every page: *"Informational only, not medical advice. Readings
-entered by the patient/caregiver."*
+Footer on every page: _"Informational only, not medical advice. Readings
+entered by the patient/caregiver."_
 
 Range selector: last week / month / 6 months / custom. **Download** first;
 WhatsApp/email share and expiring share link later.
 
 ### 5.6 Reminders
+
 - Per patient: BP AM/PM, glucose, medication — times and on/off.
 - Interface:
   ```ts
   interface ReminderChannel {
-    id: 'webpush' | 'whatsapp' | 'sms' | 'email';
+    id: "webpush" | "whatsapp" | "sms" | "email";
     send(to: Recipient, message: ReminderMessage): Promise<SendResult>;
   }
-  sendReminder(patient, channel, message)  // callers never know the channel
+  sendReminder(patient, channel, message); // callers never know the channel
   ```
 - Scheduler: a cron (e.g. Vercel Cron) calls a secret-protected route handler
   every 5–15 min (depends on hosting plan), which sends due
@@ -353,6 +360,7 @@ WhatsApp/email share and expiring share link later.
   by 11:00".
 
 ### 5.7 Data rights (export / delete)
+
 - **Export:** owner can download all data for a patient as CSV + JSON.
 - **Delete:** owner can delete a patient profile; hard-deleted after a 30-day
   grace period (undo window), then gone from backups per retention policy.
@@ -366,7 +374,7 @@ WhatsApp/email share and expiring share link later.
   encryption; restrict Atlas network access to the app). Minimal data: everything beyond name/timezone is optional.
 - **Nigeria Data Protection Act 2023** (and GDPR-style principles generally):
   explicit consent, purpose limitation, access/export, deletion, consent
-  withdrawal. Health data is *sensitive personal data* — treat it that way.
+  withdrawal. Health data is _sensitive personal data_ — treat it that way.
 - All DB access through the access-checked data layer; the MongoDB connection
   string only in server-side env vars, never in client bundles.
 - No health values in logs, analytics, error reports, or push payloads by default.
@@ -391,17 +399,17 @@ no swipe-only gestures, no timeouts, plain words, one task per screen.
 
 Each milestone ends with something usable. Within a milestone, files are
 delivered **one at a time**, following existing file boundaries, each with
-comments explaining the *why* (see `CLAUDE.md`).
+comments explaining the _why_ (see `CLAUDE.md`).
 
-| # | Milestone | Includes | Done when |
-|---|---|---|---|
-| 0 | **Skeleton** | Next.js/TS/Tailwind app, MongoDB Atlas + local dev DB, CI, lint/format, design tokens | `npm run dev` shows a styled "Today" screen; CI green |
-| 1 | **Log it** | Mongoose models + indexes (§4), access layer + tests, auth + invite link, minimal onboarding (name, tz, unit), BP + glucose forms, validation, offline outbox, history list | A real user logs for a week, including offline |
-| 2 | **See it** | Stats aggregation pipelines + tests, dashboard (week/month/6-month), charts with target bands, targets editing | Numbers match a hand-checked fixture |
-| 3 | **Share it** | PDF route + report v1, range picker, download | A doctor has seen one and given feedback |
-| 4 | **Watch it** | Alert thresholds, server-side flagging, caregiver notifications | Flag appears on save + caregiver notified |
-| 5 | **Remember it** | Reminder scheduler, web push channel, missed-reading nudge | Reminders arrive on an installed PWA |
-| 6 | **Polish + rights** | Full onboarding wizard, medications/symptoms/weight, export + delete, PWA install prompts, WhatsApp channel | Data-rights flows tested end to end |
+| #   | Milestone           | Includes                                                                                                                                                                    | Done when                                             |
+| --- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| 0   | **Skeleton**        | Next.js/TS/Tailwind app, MongoDB Atlas + local dev DB, CI, lint/format, design tokens                                                                                       | `npm run dev` shows a styled "Today" screen; CI green |
+| 1   | **Log it**          | Mongoose models + indexes (§4), access layer + tests, auth + invite link, minimal onboarding (name, tz, unit), BP + glucose forms, validation, offline outbox, history list | A real user logs for a week, including offline        |
+| 2   | **See it**          | Stats aggregation pipelines + tests, dashboard (week/month/6-month), charts with target bands, targets editing                                                              | Numbers match a hand-checked fixture                  |
+| 3   | **Share it**        | PDF route + report v1, range picker, download                                                                                                                               | A doctor has seen one and given feedback              |
+| 4   | **Watch it**        | Alert thresholds, server-side flagging, caregiver notifications                                                                                                             | Flag appears on save + caregiver notified             |
+| 5   | **Remember it**     | Reminder scheduler, web push channel, missed-reading nudge                                                                                                                  | Reminders arrive on an installed PWA                  |
+| 6   | **Polish + rights** | Full onboarding wizard, medications/symptoms/weight, export + delete, PWA install prompts, WhatsApp channel                                                                 | Data-rights flows tested end to end                   |
 
 Why this order differs from the original: the original put PDF at step 9 and
 onboarding at step 3. A logging app with no data has nothing to report, so
@@ -425,12 +433,12 @@ payoff, and early doctor feedback shapes the layout.
 
 ## 10. Risks
 
-| Risk | Mitigation |
-|---|---|
-| Users stop logging | 10-second flow, reminders, "today" checklist, caregiver nudge |
-| Dashboard and PDF disagree | Single stats module; shared unit util |
-| Wrong unit entered | Unit-slip check, single canonical unit |
-| App seen as giving medical advice | Fixed reviewed wording, no hardcoded "normal", disclaimers |
-| iOS web push only works for installed PWAs (iOS 16.4+) | Install prompt in onboarding; WhatsApp channel in M6 |
-| WhatsApp Business template approval takes time | Start the Meta/Twilio application during M3 |
-| Data leak | Single access-checked data layer + tests, no values in notifications/logs, audit log |
+| Risk                                                   | Mitigation                                                                           |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Users stop logging                                     | 10-second flow, reminders, "today" checklist, caregiver nudge                        |
+| Dashboard and PDF disagree                             | Single stats module; shared unit util                                                |
+| Wrong unit entered                                     | Unit-slip check, single canonical unit                                               |
+| App seen as giving medical advice                      | Fixed reviewed wording, no hardcoded "normal", disclaimers                           |
+| iOS web push only works for installed PWAs (iOS 16.4+) | Install prompt in onboarding; WhatsApp channel in M6                                 |
+| WhatsApp Business template approval takes time         | Start the Meta/Twilio application during M3                                          |
+| Data leak                                              | Single access-checked data layer + tests, no values in notifications/logs, audit log |

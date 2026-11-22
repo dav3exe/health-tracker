@@ -1,0 +1,13 @@
+# Local MongoDB for development, so nobody needs an Atlas account to run the
+# app. The major version matches what we use on Atlas, so aggregation features
+# like $dateTrunc with a timezone behave the same locally and in production.
+services:
+  mongo:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
